@@ -61,6 +61,57 @@ Mat adaptiveThreshold(Mat &imgGray){
 	}
 	return imgThreshold;
 }
+//大津法分割
+Mat otsuThreshold(Mat &imgGray){
+	Mat imgThreshold=Mat::zeros(imgGray.size(),imgGray.type());
+	int hist[256]={0};//存储灰度直方图
+	for(int i=0;i<imgGray.rows;i++){
+		for(int j=0;j<imgGray.cols;j++){
+			hist[imgGray.at<uchar>(i,j)]++;
+		}
+	}//计算灰度直方图
+	int total=imgGray.rows*imgGray.cols;//总像素点
+	float sum=0;//总灰度值
+	for(int i=0;i<256;i++){
+		sum+=i*hist[i];
+	}//计算总灰度值
+	float sumB=0;//前景灰度值
+	int wB=0;//前景像素点数
+	int wF=0;//背景像素点数
+	float varMax=0;//最大类间方差
+	int threshold=0;//最大类间方差对应的阈值
+	
+	//前景是灰度值等于i的像素点，背景是灰度值不等于i的像素点
+	//遍历每个灰度值，比较前景背景类间方差，取最大的类间方差对应的灰度值为阈值
+	for(int i=0;i<256;i++){
+		wB+=hist[i];//前景像素点数
+		if(wB==0){
+			continue;
+		}
+		wF=total-wB;//背景像素点数
+		if(wF==0){
+			break;
+		}
+		sumB+=i*hist[i];//前景灰度值
+		float mB=sumB/wB;//前景灰度均值
+		float mF=(sum-sumB)/wF;//背景灰度均值
+		float varBetween=wB*wF*(mB-mF)*(mB-mF);//前景背景类间方差
+		if(varBetween>varMax){
+			varMax=varBetween;
+			threshold=i;
+		}//更新最大类间方差
+	}
+	for(int i=0;i<imgGray.rows;i++){
+		for(int j=0;j<imgGray.cols;j++){
+			if(imgGray.at<uchar>(i,j)>threshold){
+				imgThreshold.at<uchar>(i,j)=255;
+			}else{
+				imgThreshold.at<uchar>(i,j)=0;
+			}
+		}
+	}//二值化
+	return imgThreshold;
+}
 //腐蚀
 Mat erode(Mat &imgThreshold){
 	Mat imgErode=Mat::zeros(imgThreshold.size(),imgThreshold.type());
@@ -104,6 +155,10 @@ int main(){
 	imshow("Image2",imgThreshold2);
 	waitKey(0);
 
+	Mat otsuImg=otsuThreshold(imgGray);
+	Mat otsuImgErode=erode(otsuImg);
+	imshow("Image3",otsuImgErode);
+	waitKey(0);
 	// VideoCapture cap;
 	// cap.open(0);
 	// Mat frame;
