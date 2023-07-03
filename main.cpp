@@ -1,5 +1,6 @@
 #include <iostream>
 #include "opencv2/opencv.hpp"
+#include "opencv2/imgproc/imgproc.hpp"
 using namespace cv;
 using namespace std;
 
@@ -61,7 +62,8 @@ Mat adaptiveThreshold(Mat &imgGray){
 	}
 	return imgThreshold;
 }
-//大津法分割
+
+//大津法阈值分割
 Mat otsuThreshold(Mat &imgGray){
 	Mat imgThreshold=Mat::zeros(imgGray.size(),imgGray.type());
 	int hist[256]={0};//存储灰度直方图
@@ -115,8 +117,8 @@ Mat otsuThreshold(Mat &imgGray){
 //腐蚀
 Mat erode(Mat &imgThreshold){
 	Mat imgErode=Mat::zeros(imgThreshold.size(),imgThreshold.type());
-	for(int i=0;i<imgThreshold.rows;i++){
-		for(int j=0;j<imgThreshold.cols;j++){
+	for(int i=1;i<imgThreshold.rows;i++){
+		for(int j=1;j<imgThreshold.cols;j++){
 			if(imgThreshold.at<uchar>(i,j)==255){
 				if(imgThreshold.at<uchar>(i-1,j)==0||imgThreshold.at<uchar>(i+1,j)==0||imgThreshold.at<uchar>(i,j-1)==0||imgThreshold.at<uchar>(i,j+1)==0){
 					imgErode.at<uchar>(i,j)=0;
@@ -126,39 +128,94 @@ Mat erode(Mat &imgThreshold){
 			}else{
 				imgErode.at<uchar>(i,j)=0;
 			}
-			// if(imgThreshold.at<uchar>(i,j)==0){
-			// 	if(imgThreshold.at<uchar>(i-1,j)==255||imgThreshold.at<uchar>(i+1,j)==255||imgThreshold.at<uchar>(i,j-1)==255||imgThreshold.at<uchar>(i,j+1)==255){
-			// 		imgErode.at<uchar>(i,j)=255;
-			// 	}else{
-			// 		imgErode.at<uchar>(i,j)=0;
-			// 	}
-			// }else{
-			// 	imgErode.at<uchar>(i,j)=0;
-			// }
 		}
 	}
 	return imgErode;
 }
+
+int leftEdgeDetect(Mat &img,Point leftEdge[]){
+	int leftEdgeNum=0;
+	Point currentPoint;
+	//找到第一个左边界点
+	for(int i=1;i<img.cols/2;i++){
+		if(img.at<uchar>(img.rows,img.cols/2-i)==0){
+			leftEdge[leftEdgeNum].x=img.rows;
+			leftEdge[leftEdgeNum].y=img.cols-i;
+			leftEdgeNum++;
+			currentPoint.x=img.rows;
+			currentPoint.y=img.cols-i;
+			break;
+		}
+	}
+	//从第一个左边界点开始，向上寻找左边界点
+	while(currentPoint.x>0){
+		if(img.at<uchar>(currentPoint.x-1,currentPoint.y-1)==0){//左上角
+			leftEdge[leftEdgeNum].x=currentPoint.x-1;
+			leftEdge[leftEdgeNum].y=currentPoint.y-1;
+			leftEdgeNum++;
+			currentPoint.x=currentPoint.x-1;
+			currentPoint.y=currentPoint.y-1;
+		}else if(img.at<uchar>(currentPoint.x-1,currentPoint.y)==0){//正上方
+			leftEdge[leftEdgeNum].x=currentPoint.x-1;
+			leftEdge[leftEdgeNum].y=currentPoint.y;
+			leftEdgeNum++;
+			currentPoint.x=currentPoint.x-1;
+			currentPoint.y=currentPoint.y;
+		}else if(img.at<uchar>(currentPoint.x-1,currentPoint.y+1)==0){//右上角
+			leftEdge[leftEdgeNum].x=currentPoint.x-1;
+			leftEdge[leftEdgeNum].y=currentPoint.y+1;
+			leftEdgeNum++;
+			currentPoint.x=currentPoint.x-1;
+			currentPoint.y=currentPoint.y+1;
+		}else{
+			break;
+		}
+	}
+	return leftEdgeNum;
+}
+
 int main(){
 
-	Mat img=imread("0.jpg");
+	Mat img=imread("imgs/straight.jpg");
 	Mat imgGray=baseImgGrey(img);
-	Mat imgThreshold=threshold(imgGray,130);
+	Mat imgThreshold=otsuThreshold(imgGray);
 	Mat imgErode=erode(imgThreshold);
-	imshow("Image1",imgErode);
-	waitKey(0);
 
-	Mat imgCompress=Compress(imgGray);
-	Mat imgThreshold2=threshold(imgCompress,130);
-	Mat imgErode2=erode(imgThreshold2);
+	Point leftEdge[img.rows];
+	int leftEdgeNum=leftEdgeDetect(imgErode,leftEdge);
+	cout<<leftEdgeNum<<endl;
+	
+	circle(img,Point(img.rows/2,img.cols/2),1,Scalar(0,0,255),2);
+	for(int i=0;i<leftEdgeNum;i++){
+		circle(img,leftEdge[i],1,Scalar(0,0,255),2);
+	}
 
-	imshow("Image2",imgThreshold2);
-	waitKey(0);
+	imshow("imgThreshold",img);
+	waitKey(0);	
+	
 
-	Mat otsuImg=otsuThreshold(imgGray);
-	Mat otsuImgErode=erode(otsuImg);
-	imshow("Image3",otsuImgErode);
-	waitKey(0);
+	// Mat img=imread("imgs/straight.jpg");
+	// imshow("Image0",img);
+	// waitKey(0);
+
+	// Mat imgGray=baseImgGrey(img);
+	// Mat imgThreshold=threshold(imgGray,130);
+	// Mat imgErode=erode(imgThreshold);
+	// imshow("Image1",imgThreshold);
+	// waitKey(0);
+
+	// Mat imgCompress=Compress(imgGray);
+	// Mat imgThreshold2=threshold(imgCompress,130);
+	// Mat imgErode2=erode(imgThreshold2);
+
+	// imshow("Image2",imgThreshold2);
+	// waitKey(0);
+
+	// Mat otsuImg=otsuThreshold(imgGray);
+	// Mat otsuImgErode=erode(otsuImg);
+	// imshow("Image3",otsuImg);
+	// waitKey(0);
+
 	// VideoCapture cap;
 	// cap.open(0);
 	// Mat frame;
