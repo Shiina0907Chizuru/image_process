@@ -144,7 +144,6 @@ int leftEdgeDetect(Mat &img,Point leftEdge[]){
 			leftEdgeNum++;
 			currentPoint.x=img.cols/2-i;
 			currentPoint.y=img.rows-2;
-			cout<<i<<endl;
 			break;
 		}
 	}
@@ -174,9 +173,33 @@ int leftEdgeDetect(Mat &img,Point leftEdge[]){
 	}
 	return leftEdgeNum;
 }
-int midlineDetect(Mat &img,Point midline[]){
+int midlineDetect(Mat &img,Point leftEdge[],int leftEdgeNum,Point midline[]){//求左线的两点的垂线，求垂线与右线的交点，求交点的中点，作为中线的点
 	int midlineNum=0;
-
+	double k;//左线两点垂线方程的斜率
+	double c;//左线两点垂线方程的常数项
+	for(int i=0;i<leftEdgeNum;i++){
+		//y-y0=k(x-x0)
+		//y=kx+y0-kx0
+		//c=y0-kx0
+		if(leftEdge[i].y==leftEdge[i+1].y){
+			continue;//左线两点的y坐标相等，垂线不存在，跳过
+		}
+		k=-(double)(leftEdge[i].x-leftEdge[i+1].x)/(double)(leftEdge[i].y-leftEdge[i+1].y);
+		c=leftEdge[i].y-k*leftEdge[i].x;
+		for(int j=1;j<img.cols-leftEdge[i].x;j++){
+			int x0=leftEdge[i].x+j;
+			int y0=k*x0+c;
+			if(y0>img.rows-1||x0>img.cols-1){
+				continue;//垂线与右线的交点不在图像内，跳过
+			}
+			if(img.at<uchar>(x0,y0)==0){//按垂线找到与右线的交点，交点坐标为(leftEdge[i].x+j,k*(leftEdge[i].x)+c)
+				midline[midlineNum].x=(leftEdge[i].x+x0)/2;
+				midline[midlineNum].y=(leftEdge[i].y+y0)/2;
+				midlineNum++;
+				break;
+			}
+		}
+	}
 
 	return midlineNum;
 }
@@ -190,12 +213,19 @@ int main(){
 
 	Point leftEdge[img.rows];
 	int leftEdgeNum=leftEdgeDetect(imgErode,leftEdge);
-	cout<<leftEdgeNum<<endl;
+	cout<<"leftEdgeNum:"<<leftEdgeNum<<endl;
 	
 	circle(img,Point(img.cols/2,img.rows/2),1,Scalar(0,0,255),2);
 	for(int i=0;i<leftEdgeNum;i++){
 		circle(img,leftEdge[i],1,Scalar(0,0,255),2);
-	}
+	}//画出左边界点
+
+	Point midline[leftEdgeNum];
+	int midlineNum=midlineDetect(imgErode,leftEdge,leftEdgeNum,midline);
+	cout<<"midlineNum:"<<midlineNum<<endl;
+	for(int i=0;i<midlineNum;i++){
+		circle(img,midline[i],1,Scalar(0,255,0),2);
+	}//画出中线点
 	imshow("img",imgErode);
 	waitKey(0);
 	imshow("imgThreshold",img);
