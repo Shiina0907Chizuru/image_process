@@ -135,61 +135,69 @@ Mat erode(Mat &imgThreshold){
 
 int leftEdgeDetect(Mat &img,Point leftEdge[]){
 	int leftEdgeNum=0;
-	Point currentPoint;
+	Point currentPoint;//当前点，x为列，y为行，注意和img.at<>中的顺序不同
 	//找到第一个左边界点
 	for(int i=1;i<img.cols/2;i++){
-		if(img.at<uchar>(img.rows,img.cols/2-i)==0){
-			leftEdge[leftEdgeNum].x=img.rows;
-			leftEdge[leftEdgeNum].y=img.cols-i;
+		if(img.at<uchar>(img.rows-2,img.cols/2-i)==0){//img.at<uchar>(,)，第一个参数是行，第二个参数是列
+			leftEdge[leftEdgeNum].x=img.cols/2-i;
+			leftEdge[leftEdgeNum].y=img.rows-2;
 			leftEdgeNum++;
-			currentPoint.x=img.rows;
-			currentPoint.y=img.cols-i;
+			currentPoint.x=img.cols/2-i;
+			currentPoint.y=img.rows-2;
+			cout<<i<<endl;
 			break;
 		}
 	}
 	//从第一个左边界点开始，向上寻找左边界点
-	while(currentPoint.x>0){
-		if(img.at<uchar>(currentPoint.x-1,currentPoint.y-1)==0){//左上角
+	while(currentPoint.x>0&&currentPoint.y>0){
+		if(img.at<uchar>(currentPoint.y-1,currentPoint.x-1)==0){//左上角
 			leftEdge[leftEdgeNum].x=currentPoint.x-1;
 			leftEdge[leftEdgeNum].y=currentPoint.y-1;
 			leftEdgeNum++;
 			currentPoint.x=currentPoint.x-1;
 			currentPoint.y=currentPoint.y-1;
-		}else if(img.at<uchar>(currentPoint.x-1,currentPoint.y)==0){//正上方
-			leftEdge[leftEdgeNum].x=currentPoint.x-1;
-			leftEdge[leftEdgeNum].y=currentPoint.y;
+		}else if(img.at<uchar>(currentPoint.y-1,currentPoint.x)==0){//正上方
+			leftEdge[leftEdgeNum].x=currentPoint.x;
+			leftEdge[leftEdgeNum].y=currentPoint.y-1;
 			leftEdgeNum++;
-			currentPoint.x=currentPoint.x-1;
-			currentPoint.y=currentPoint.y;
-		}else if(img.at<uchar>(currentPoint.x-1,currentPoint.y+1)==0){//右上角
-			leftEdge[leftEdgeNum].x=currentPoint.x-1;
-			leftEdge[leftEdgeNum].y=currentPoint.y+1;
+			currentPoint.x=currentPoint.x;
+			currentPoint.y=currentPoint.y-1;
+		}else if(img.at<uchar>(currentPoint.y-1,currentPoint.x+1)==0){//右上角
+			leftEdge[leftEdgeNum].x=currentPoint.x+1;
+			leftEdge[leftEdgeNum].y=currentPoint.y-1;
 			leftEdgeNum++;
-			currentPoint.x=currentPoint.x-1;
-			currentPoint.y=currentPoint.y+1;
+			currentPoint.x=currentPoint.x+1;
+			currentPoint.y=currentPoint.y-1;
 		}else{
 			break;
 		}
 	}
 	return leftEdgeNum;
 }
+int midlineDetect(Mat &img,Point midline[]){
+	int midlineNum=0;
 
+
+	return midlineNum;
+}
 int main(){
 
 	Mat img=imread("imgs/straight.jpg");
 	Mat imgGray=baseImgGrey(img);
 	Mat imgThreshold=otsuThreshold(imgGray);
+	// Mat imgThreshold=threshold(imgGray,130);
 	Mat imgErode=erode(imgThreshold);
 
 	Point leftEdge[img.rows];
 	int leftEdgeNum=leftEdgeDetect(imgErode,leftEdge);
 	cout<<leftEdgeNum<<endl;
 	
-	circle(img,Point(img.rows/2,img.cols/2),1,Scalar(0,0,255),2);
+	circle(img,Point(img.cols/2,img.rows/2),1,Scalar(0,0,255),2);
 	for(int i=0;i<leftEdgeNum;i++){
 		circle(img,leftEdge[i],1,Scalar(0,0,255),2);
 	}
-
+	imshow("img",imgErode);
+	waitKey(0);
 	imshow("imgThreshold",img);
 	waitKey(0);	
 	
@@ -201,7 +209,7 @@ int main(){
 	// Mat imgGray=baseImgGrey(img);
 	// Mat imgThreshold=threshold(imgGray,130);
 	// Mat imgErode=erode(imgThreshold);
-	// imshow("Image1",imgThreshold);
+	// imshow("Image1",imgErode);
 	// waitKey(0);
 
 	// Mat imgCompress=Compress(imgGray);
@@ -238,6 +246,6 @@ int main(){
 	
 
 
-
+	destroyAllWindows();
 	return 0;
 }
