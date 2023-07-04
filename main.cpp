@@ -167,6 +167,30 @@ int leftEdgeDetect(Mat &img,Point leftEdge[]){
 			leftEdgeNum++;
 			currentPoint.x=currentPoint.x-1;
 			currentPoint.y=currentPoint.y-1;
+		}else if(img.at<uchar>(currentPoint.y,currentPoint.x-1)==0){//正左方
+			leftEdge[leftEdgeNum].x=currentPoint.x-1;
+			leftEdge[leftEdgeNum].y=currentPoint.y;
+			leftEdgeNum++;
+			currentPoint.x=currentPoint.x-1;
+			currentPoint.y=currentPoint.y;
+		}else if(img.at<uchar>(currentPoint.y+1,currentPoint.x-1)==0){//左下角
+			leftEdge[leftEdgeNum].x=currentPoint.x-1;
+			leftEdge[leftEdgeNum].y=currentPoint.y+1;
+			leftEdgeNum++;
+			currentPoint.x=currentPoint.x-1;
+			currentPoint.y=currentPoint.y+1;
+		}else if(img.at<uchar>(currentPoint.y+1,currentPoint.x)==0){//正下方
+			leftEdge[leftEdgeNum].x=currentPoint.x;
+			leftEdge[leftEdgeNum].y=currentPoint.y+1;
+			leftEdgeNum++;
+			currentPoint.x=currentPoint.x;
+			currentPoint.y=currentPoint.y+1;
+		}else if(img.at<uchar>(currentPoint.y+1,currentPoint.x+1)==0){//右下角
+			leftEdge[leftEdgeNum].x=currentPoint.x+1;
+			leftEdge[leftEdgeNum].y=currentPoint.y+1;
+			leftEdgeNum++;
+			currentPoint.x=currentPoint.x+1;
+			currentPoint.y=currentPoint.y+1;
 		}else{
 			break;
 		}
@@ -224,7 +248,7 @@ int midlineDetect(Mat &img,Point leftEdge[],int leftEdgeNum,Point midline[]){//�
 }
 int main(){
 
-	Mat img=imread("imgs/twists.jpg");
+	Mat img=imread("imgs/straight.jpg");
 	Mat imgGray=baseImgGrey(img);
 	Mat imgThreshold=otsuThreshold(imgGray);
 	// Mat imgThreshold=threshold(imgGray,130);
