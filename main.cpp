@@ -191,6 +191,12 @@ int leftEdgeDetect(Mat &img,Point leftEdge[]){
 			leftEdgeNum++;
 			currentPoint.x=currentPoint.x+1;
 			currentPoint.y=currentPoint.y+1;
+		}else if(img.at<uchar>(currentPoint.y,currentPoint.x+1)==0){//正右方
+			leftEdge[leftEdgeNum].x=currentPoint.x+1;
+			leftEdge[leftEdgeNum].y=currentPoint.y;
+			leftEdgeNum++;
+			currentPoint.x=currentPoint.x+1;
+			currentPoint.y=currentPoint.y;
 		}else{
 			break;
 		}
@@ -202,10 +208,11 @@ int leftEdgeDetect(Mat &img,Point leftEdge[]){
 	
 	return leftEdgeNum;
 }
+//直接横向找右线点另一点，取中点做中线上的点，直道效果好，弯道效果有偏差
 int midlineDetectWithAve(Mat &img,Point leftEdge[],int leftEdgeNum,Point midline[]){
 	int midlineNum=0;
 	for(int i=0;i<leftEdgeNum;i++){
-		for(int j=leftEdge[i].x+1;j<img.cols;j++){
+		for(int j=leftEdge[i].x+5;j<img.cols;j++){
 			if(img.at<uchar>(leftEdge[i].y,j)==0){
 				midline[midlineNum].x=(leftEdge[i].x+j)/2;
 				midline[midlineNum].y=leftEdge[i].y;
@@ -216,6 +223,7 @@ int midlineDetectWithAve(Mat &img,Point leftEdge[],int leftEdgeNum,Point midline
 	}
 	return midlineNum;
 }
+//找两个点做垂线交右线于另一点，取中点做中线上的点，效果非常不好，一方面因为垂线可能和左线自身相交，另一方面因为像素离散，垂线和右线相交会偏向一侧
 int midlineDetect(Mat &img,Point leftEdge[],int leftEdgeNum,Point midline[]){//求左线的两点的垂线，求垂线与右线的交点，求交点的中点，作为中线的点
 	int midlineNum=0;
 	double k;//左线两点垂线方程的斜率
@@ -246,6 +254,51 @@ int midlineDetect(Mat &img,Point leftEdge[],int leftEdgeNum,Point midline[]){//�
 
 	return midlineNum;
 }
+//取左线五个点拟合直线再做垂线交右线于另一点，取中点做中线的点，有误差待处理
+int midlineDetectWithCurveFitting(Mat &img,Point leftEdge[],int leftEdgeNum,Point midline[]){//求左线的两点的垂线，求垂线与右线的交点，求交点的中点，作为中线的点
+	int midlineNum=0;
+	//y=kx+c
+	double k;//左线拟合直线的垂线方程的斜率
+	double c;//左线拟合直线的垂线方程的常数项
+	int m1=0,m2=0,m3=0,m4=0,m5=0;//最小二乘拟合直线所需参数
+	for(int i=0;i<leftEdgeNum;i+=5){
+		//将参数初始化为0
+		m1=0;
+		m2=0;
+		m3=0;
+		m4=0;
+		m5=0;
+		//求参数
+		for(int d=0;d<5;d++){
+			m1+=leftEdge[i+d].x*leftEdge[i+d].y;//x*y的和
+			m2+=leftEdge[i+d].x;//x的和
+			m3+=leftEdge[i+d].y;//y的和
+			m4+=leftEdge[i+d].x*leftEdge[i+d].x;//x平方的和
+		}
+		m5=m2*m2;//x和的平方
+		if((5*m1-m2*m3)==0){
+			continue;//垂线不存在，跳过
+		}
+		k=-(double)(5*m4-m5)/(double)(5*m1-m2*m3);//拟合直线的垂线的斜率
+		c=m3/5-k*m2/5;//拟合直线的曲线的垂线的常数项
+		
+		for(int j=leftEdge[i].x+5;j<img.cols;j++){
+			int x0=j;
+			int y0=k*x0+c;
+			if(y0>img.rows-1||x0>img.cols-1){
+				continue;//垂线与右线的交点不在图像内，跳过
+			}
+			if(img.at<uchar>(x0,y0)==0){//按垂线找到与右线的交点，交点坐标为(j,k*(leftEdge[i].x)+c)
+				midline[midlineNum].x=(leftEdge[i].x+x0)/2;
+				midline[midlineNum].y=(leftEdge[i].y+y0)/2;
+				midlineNum++;
+				break;
+			}
+		}
+	}
+
+	return midlineNum;
+}
 int main(){
 
 	Mat img=imread("imgs/straight.jpg");
@@ -264,8 +317,8 @@ int main(){
 	}//画出左边界点
 
 	Point midline[leftEdgeNum];
-	// int midlineNum=midlineDetect(imgErode,leftEdge,leftEdgeNum,midline);
-	int midlineNum=midlineDetectWithAve(imgErode,leftEdge,leftEdgeNum,midline);
+	int midlineNum=midlineDetect(imgErode,leftEdge,leftEdgeNum,midline);
+	// int midlineNum=midlineDetectWithAve(imgErode,leftEdge,leftEdgeNum,midline);
 	cout<<"midlineNum:"<<midlineNum<<endl;
 	for(int i=0;i<midlineNum;i++){
 		circle(img,midline[i],1,Scalar(0,255,0),2);
