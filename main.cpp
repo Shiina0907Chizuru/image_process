@@ -149,11 +149,11 @@ int leftEdgeDetect(Mat &img,Point leftEdge[]){
 	}
 	//从第一个左边界点开始，向上寻找左边界点
 	while(currentPoint.x>0&&currentPoint.y>0){
-		if(img.at<uchar>(currentPoint.y-1,currentPoint.x-1)==0){//左上角
-			leftEdge[leftEdgeNum].x=currentPoint.x-1;
+		if(img.at<uchar>(currentPoint.y-1,currentPoint.x+1)==0){//右上角
+			leftEdge[leftEdgeNum].x=currentPoint.x+1;
 			leftEdge[leftEdgeNum].y=currentPoint.y-1;
 			leftEdgeNum++;
-			currentPoint.x=currentPoint.x-1;
+			currentPoint.x=currentPoint.x+1;
 			currentPoint.y=currentPoint.y-1;
 		}else if(img.at<uchar>(currentPoint.y-1,currentPoint.x)==0){//正上方
 			leftEdge[leftEdgeNum].x=currentPoint.x;
@@ -161,23 +161,42 @@ int leftEdgeDetect(Mat &img,Point leftEdge[]){
 			leftEdgeNum++;
 			currentPoint.x=currentPoint.x;
 			currentPoint.y=currentPoint.y-1;
-		}else if(img.at<uchar>(currentPoint.y-1,currentPoint.x+1)==0){//右上角
-			leftEdge[leftEdgeNum].x=currentPoint.x+1;
+		}else if(img.at<uchar>(currentPoint.y-1,currentPoint.x-1)==0){//左上角
+			leftEdge[leftEdgeNum].x=currentPoint.x-1;
 			leftEdge[leftEdgeNum].y=currentPoint.y-1;
 			leftEdgeNum++;
-			currentPoint.x=currentPoint.x+1;
+			currentPoint.x=currentPoint.x-1;
 			currentPoint.y=currentPoint.y-1;
 		}else{
 			break;
 		}
+
+		for(int i=currentPoint.x+1;i<img.cols/2&&img.at<uchar>(currentPoint.y,i)==0;i++){
+			leftEdge[leftEdgeNum].x=i;//找到最左线右边的像素作为左线的点
+		}
 	}
+	
 	return leftEdgeNum;
+}
+int midlineDetectWithAve(Mat &img,Point leftEdge[],int leftEdgeNum,Point midline[]){
+	int midlineNum=0;
+	for(int i=0;i<leftEdgeNum;i++){
+		for(int j=leftEdge[i].x+1;j<img.cols;j++){
+			if(img.at<uchar>(leftEdge[i].y,j)==0){
+				midline[midlineNum].x=(leftEdge[i].x+j)/2;
+				midline[midlineNum].y=leftEdge[i].y;
+				midlineNum++;
+				break;
+			}
+		}
+	}
+	return midlineNum;
 }
 int midlineDetect(Mat &img,Point leftEdge[],int leftEdgeNum,Point midline[]){//求左线的两点的垂线，求垂线与右线的交点，求交点的中点，作为中线的点
 	int midlineNum=0;
 	double k;//左线两点垂线方程的斜率
 	double c;//左线两点垂线方程的常数项
-	for(int i=0;i<leftEdgeNum;i++){
+	for(int i=0;i<leftEdgeNum;i+=2){
 		//y-y0=k(x-x0)
 		//y=kx+y0-kx0
 		//c=y0-kx0
@@ -205,7 +224,7 @@ int midlineDetect(Mat &img,Point leftEdge[],int leftEdgeNum,Point midline[]){//�
 }
 int main(){
 
-	Mat img=imread("imgs/straight.jpg");
+	Mat img=imread("imgs/twists.jpg");
 	Mat imgGray=baseImgGrey(img);
 	Mat imgThreshold=otsuThreshold(imgGray);
 	// Mat imgThreshold=threshold(imgGray,130);
@@ -221,11 +240,13 @@ int main(){
 	}//画出左边界点
 
 	Point midline[leftEdgeNum];
-	int midlineNum=midlineDetect(imgErode,leftEdge,leftEdgeNum,midline);
+	// int midlineNum=midlineDetect(imgErode,leftEdge,leftEdgeNum,midline);
+	int midlineNum=midlineDetectWithAve(imgErode,leftEdge,leftEdgeNum,midline);
 	cout<<"midlineNum:"<<midlineNum<<endl;
 	for(int i=0;i<midlineNum;i++){
 		circle(img,midline[i],1,Scalar(0,255,0),2);
 	}//画出中线点
+	
 	imshow("img",imgErode);
 	waitKey(0);
 	imshow("imgThreshold",img);
