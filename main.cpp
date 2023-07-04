@@ -4,6 +4,100 @@
 using namespace cv;
 using namespace std;
 
+Mat baseImgGrey(Mat &img);
+Mat Compress(Mat &imgGray);
+Mat threshold(Mat &imgGray,int thresh);
+Mat adaptiveThreshold(Mat &imgGray);
+Mat otsuThreshold(Mat &imgGray);
+Mat erode(Mat &imgThreshold);
+int leftEdgeDetect(Mat &img,Point leftEdge[]);
+int midlineDetectWithAve(Mat &img,Point leftEdge[],int leftEdgeNum,Point midline[]);
+int midlineDetectWithVertical(Mat &img,Point leftEdge[],int leftEdgeNum,Point midline[]);
+int midlineDetectWithCurveFitting(Mat &img,Point leftEdge[],int leftEdgeNum,Point midline[],int num);
+
+int main(){
+
+	Mat img=imread("imgs/twists.jpg");//之后做了灰度变换和腐蚀处理但寻中线仍使用的img
+	if(img.empty()){
+		cout<<"image is empty or the path is invalid"<<endl;
+		return 1;
+	}
+	Mat imgGray=baseImgGrey(img);
+	Mat imgThreshold=otsuThreshold(imgGray);
+	// Mat imgThreshold=threshold(imgGray,130);
+	Mat imgErode=erode(imgThreshold);
+
+	Point leftEdge[img.rows*2];
+	int leftEdgeNum=leftEdgeDetect(imgErode,leftEdge);
+	cout<<"leftEdgeNum:"<<leftEdgeNum<<endl;
+	
+	
+	for(int i=0;i<leftEdgeNum;i++){
+		circle(img,leftEdge[i],1,Scalar(0,0,255),2);
+	}//画出左边界点
+
+	Point midline[leftEdgeNum];
+	int midlineNum=midlineDetectWithCurveFitting(img,leftEdge,leftEdgeNum,midline,10);
+	// int midlineNum=midlineDetectWithAve(imgErode,leftEdge,leftEdgeNum,midline);
+	// int midlineNum=midlineDetectWithVertical(imgErode,leftEdge,leftEdgeNum,midline);
+	cout<<"midlineNum:"<<midlineNum<<endl;
+	for(int i=0;i<midlineNum;i++){
+		circle(img,midline[i],1,Scalar(0,255,0),2);
+	}//画出中线点
+	
+	imshow("img",imgErode);
+	waitKey(0);
+	imshow("imgThreshold",img);
+	waitKey(0);	
+	
+
+	// Mat img=imread("imgs/straight.jpg");
+	// imshow("Image0",img);
+	// waitKey(0);
+
+	// Mat imgGray=baseImgGrey(img);
+	// Mat imgThreshold=threshold(imgGray,130);
+	// Mat imgErode=erode(imgThreshold);
+	// imshow("Image1",imgErode);
+	// waitKey(0);
+
+	// Mat imgCompress=Compress(imgGray);
+	// Mat imgThreshold2=threshold(imgCompress,130);
+	// Mat imgErode2=erode(imgThreshold2);
+
+	// imshow("Image2",imgThreshold2);
+	// waitKey(0);
+
+	// Mat otsuImg=otsuThreshold(imgGray);
+	// Mat otsuImgErode=erode(otsuImg);
+	// imshow("Image3",otsuImg);
+	// waitKey(0);
+
+	// VideoCapture cap;
+	// cap.open(0);
+	// Mat frame;
+	// Mat frameCompress;
+	// Mat frameGray;
+	// Mat frameErode;
+	// Mat frameThreshold;
+	// while (1){
+	// 	cap>>frame;
+	// 	frameCompress=Compress(frame);
+	// 	frameGray=baseImgGrey(frameCompress);
+	// 	frameErode=erode(frameGray);
+	// 	frameThreshold=threshold(frameErode,10);
+	// 	imshow("frame",frameThreshold);
+	// 	if(waitKey(30)>=0) {
+	// 		break;
+	// 	}
+	// }
+	// cap.release();
+	
+
+
+	destroyAllWindows();
+	return 0;
+}
 //读入图片并转换为灰度图
 Mat baseImgGrey(Mat &img){
 	Mat imgGray=Mat::zeros(img.size(),img.type());
@@ -132,9 +226,10 @@ Mat erode(Mat &imgThreshold){
 	}
 	return imgErode;
 }
-
+//寻左线
 int leftEdgeDetect(Mat &img,Point leftEdge[]){
 	int leftEdgeNum=0;
+	int direction=0;//标记方向，避免搜索时重复，1，2，3，4，5，6，7，8分别为1右上，2正上，3左上，4正左，5左下，6正下，7右下，8正右，即从右上角逆时针方向
 	Point currentPoint;//当前点，x为列，y为行，注意和img.at<>中的顺序不同
 	//找到第一个左边界点
 	for(int i=1;i<img.cols/2;i++){
@@ -147,51 +242,58 @@ int leftEdgeDetect(Mat &img,Point leftEdge[]){
 			break;
 		}
 	}
-	//从第一个左边界点开始，向上寻找左边界点
+	//从第一个左边界点开始，八邻域边缘跟踪与区域生长寻找左边界
 	while(currentPoint.x>0&&currentPoint.y>0){
-		if(img.at<uchar>(currentPoint.y-1,currentPoint.x+1)==0){//右上角
+		if(img.at<uchar>(currentPoint.y-1,currentPoint.x+1)==0&&direction!=4&&direction!=5&&direction!=6){//右上角
+			direction=1;
 			leftEdge[leftEdgeNum].x=currentPoint.x+1;
 			leftEdge[leftEdgeNum].y=currentPoint.y-1;
 			leftEdgeNum++;
 			currentPoint.x=currentPoint.x+1;
 			currentPoint.y=currentPoint.y-1;
-		}else if(img.at<uchar>(currentPoint.y-1,currentPoint.x)==0){//正上方
+		}else if(img.at<uchar>(currentPoint.y-1,currentPoint.x)==0&&direction!=5&&direction!=6&&direction!=7){//正上方
+			direction=1;
 			leftEdge[leftEdgeNum].x=currentPoint.x;
 			leftEdge[leftEdgeNum].y=currentPoint.y-1;
 			leftEdgeNum++;
 			currentPoint.x=currentPoint.x;
 			currentPoint.y=currentPoint.y-1;
-		}else if(img.at<uchar>(currentPoint.y-1,currentPoint.x-1)==0){//左上角
+		}else if(img.at<uchar>(currentPoint.y-1,currentPoint.x-1)==0&&direction!=6&&direction!=7&&direction!=8){//左上角
+			direction=1;
 			leftEdge[leftEdgeNum].x=currentPoint.x-1;
 			leftEdge[leftEdgeNum].y=currentPoint.y-1;
 			leftEdgeNum++;
 			currentPoint.x=currentPoint.x-1;
 			currentPoint.y=currentPoint.y-1;
-		}else if(img.at<uchar>(currentPoint.y,currentPoint.x-1)==0){//正左方
+		}else if(img.at<uchar>(currentPoint.y,currentPoint.x-1)==0&&direction!=1&&direction!=2&&direction!=6&&direction!=7&&direction!=8){//正左方
+
 			leftEdge[leftEdgeNum].x=currentPoint.x-1;
 			leftEdge[leftEdgeNum].y=currentPoint.y;
 			leftEdgeNum++;
 			currentPoint.x=currentPoint.x-1;
 			currentPoint.y=currentPoint.y;
-		}else if(img.at<uchar>(currentPoint.y+1,currentPoint.x-1)==0){//左下角
+		}else if(img.at<uchar>(currentPoint.y+1,currentPoint.x-1)==0&&direction!=1&&direction!=2&&direction!=8){//左下角
+			direction=2;
 			leftEdge[leftEdgeNum].x=currentPoint.x-1;
 			leftEdge[leftEdgeNum].y=currentPoint.y+1;
 			leftEdgeNum++;
 			currentPoint.x=currentPoint.x-1;
 			currentPoint.y=currentPoint.y+1;
-		}else if(img.at<uchar>(currentPoint.y+1,currentPoint.x)==0){//正下方
+		}else if(img.at<uchar>(currentPoint.y+1,currentPoint.x)==0&&direction!=1&&direction!=2&&direction!=3&&direction!=4&&direction!=8){//正下方
+			direction=2;
 			leftEdge[leftEdgeNum].x=currentPoint.x;
 			leftEdge[leftEdgeNum].y=currentPoint.y+1;
 			leftEdgeNum++;
 			currentPoint.x=currentPoint.x;
 			currentPoint.y=currentPoint.y+1;
-		}else if(img.at<uchar>(currentPoint.y+1,currentPoint.x+1)==0){//右下角
+		}else if(img.at<uchar>(currentPoint.y+1,currentPoint.x+1)==0&&direction!=2&&direction!=3&&direction!=4){//右下角
+			direction=2;
 			leftEdge[leftEdgeNum].x=currentPoint.x+1;
 			leftEdge[leftEdgeNum].y=currentPoint.y+1;
 			leftEdgeNum++;
 			currentPoint.x=currentPoint.x+1;
 			currentPoint.y=currentPoint.y+1;
-		}else if(img.at<uchar>(currentPoint.y,currentPoint.x+1)==0){//正右方
+		}else if(img.at<uchar>(currentPoint.y,currentPoint.x+1&&direction!=2&&direction!=3&&direction!=4&&direction!=5&&direction!=6)==0){//正右方
 			leftEdge[leftEdgeNum].x=currentPoint.x+1;
 			leftEdge[leftEdgeNum].y=currentPoint.y;
 			leftEdgeNum++;
@@ -254,7 +356,7 @@ int midlineDetectWithVertical(Mat &img,Point leftEdge[],int leftEdgeNum,Point mi
 
 	return midlineNum;
 }
-//取左线num个点拟合直线再做垂线交右线于另一点，取中点做中线的点，有误差待处理，仍偏向一侧
+//取左线num个点拟合直线再做垂线交右线于另一点，取中点做中线的点，弯道效果非常不好，有误差待处理，仍偏向一侧
 int midlineDetectWithCurveFitting(Mat &img,Point leftEdge[],int leftEdgeNum,Point midline[],int num){//求左线的两点的垂线，求垂线与右线的交点，求交点的中点，作为中线的点
 	int midlineNum=0;
 	//y=kx+c
@@ -298,83 +400,4 @@ int midlineDetectWithCurveFitting(Mat &img,Point leftEdge[],int leftEdgeNum,Poin
 	}
 
 	return midlineNum;
-}
-int main(){
-
-	Mat img=imread("imgs/straight.jpg");//之后做了灰度变换和腐蚀处理但寻中线仍使用的img
-	Mat imgGray=baseImgGrey(img);
-	Mat imgThreshold=otsuThreshold(imgGray);
-	// Mat imgThreshold=threshold(imgGray,130);
-	Mat imgErode=erode(imgThreshold);
-
-	Point leftEdge[img.rows];
-	int leftEdgeNum=leftEdgeDetect(imgErode,leftEdge);
-	cout<<"leftEdgeNum:"<<leftEdgeNum<<endl;
-	
-	circle(img,Point(img.cols/2,img.rows/2),1,Scalar(0,0,255),2);
-	for(int i=0;i<leftEdgeNum;i++){
-		circle(img,leftEdge[i],1,Scalar(0,0,255),2);
-	}//画出左边界点
-
-	Point midline[leftEdgeNum];
-	//int midlineNum=midlineDetectWithCurveFitting(img,leftEdge,leftEdgeNum,midline,10);
-	// int midlineNum=midlineDetectWithAve(imgErode,leftEdge,leftEdgeNum,midline);
-	// int midlineNum=midlineDetectWithVertical(imgErode,leftEdge,leftEdgeNum,midline);
-	cout<<"midlineNum:"<<midlineNum<<endl;
-	for(int i=0;i<midlineNum;i++){
-		circle(img,midline[i],1,Scalar(0,255,0),2);
-	}//画出中线点
-	
-	imshow("img",imgErode);
-	waitKey(0);
-	imshow("imgThreshold",img);
-	waitKey(0);	
-	
-
-	// Mat img=imread("imgs/straight.jpg");
-	// imshow("Image0",img);
-	// waitKey(0);
-
-	// Mat imgGray=baseImgGrey(img);
-	// Mat imgThreshold=threshold(imgGray,130);
-	// Mat imgErode=erode(imgThreshold);
-	// imshow("Image1",imgErode);
-	// waitKey(0);
-
-	// Mat imgCompress=Compress(imgGray);
-	// Mat imgThreshold2=threshold(imgCompress,130);
-	// Mat imgErode2=erode(imgThreshold2);
-
-	// imshow("Image2",imgThreshold2);
-	// waitKey(0);
-
-	// Mat otsuImg=otsuThreshold(imgGray);
-	// Mat otsuImgErode=erode(otsuImg);
-	// imshow("Image3",otsuImg);
-	// waitKey(0);
-
-	// VideoCapture cap;
-	// cap.open(0);
-	// Mat frame;
-	// Mat frameCompress;
-	// Mat frameGray;
-	// Mat frameErode;
-	// Mat frameThreshold;
-	// while (1){
-	// 	cap>>frame;
-	// 	frameCompress=Compress(frame);
-	// 	frameGray=baseImgGrey(frameCompress);
-	// 	frameErode=erode(frameGray);
-	// 	frameThreshold=threshold(frameErode,10);
-	// 	imshow("frame",frameThreshold);
-	// 	if(waitKey(30)>=0) {
-	// 		break;
-	// 	}
-	// }
-	// cap.release();
-	
-
-
-	destroyAllWindows();
-	return 0;
 }
