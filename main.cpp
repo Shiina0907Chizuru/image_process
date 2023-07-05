@@ -1,5 +1,5 @@
 //TODO:寻找更合理的方法寻中线
-//TODO:考虑不采用二值化的方式而直接通过灰度图探测道路线，比如差比和differenceSum
+//TODO:考虑不采用二值化的方式而直接通过灰度图探测道路线，比如差比和differenceSum(已实现)
 #include <iostream>
 #include <chrono>
 #include "opencv2/opencv.hpp"
@@ -18,14 +18,14 @@ Mat erode(Mat &imgThreshold);
 int differenceSum(int pixel1,int pixel2);
 int differenceSumThreshold(Mat &imgGray,int diff);
 int leftEdgeDetectWithBinary(Mat &img,Point leftEdge[]);
-int leftEdgeDetectWithDifferenceSum(Mat &img,Point leftEdge[],int threshold);
+int leftEdgeDetectWithDifferenceSum(Mat &img,Point leftEdge[],int threshold,int period=5);
 int midlineDetectWithAve(Mat &img,Point leftEdge[],int leftEdgeNum,Point midline[],int num);
 int midlineDetectWithVertical(Mat &img,Point leftEdge[],int leftEdgeNum,Point midline[],int num);
 int midlineDetectWithCurveFitting(Mat &img,Point leftEdge[],int leftEdgeNum,Point midline[],int num);
 double calculateErrors(Point midline[],int midlineNum);
 int main(){
 	
-	Mat img=imread("imgs/straight.jpg");//之后做了灰度变换和腐蚀处理但寻中线仍使用的img
+	Mat img=imread("imgs/twists.jpg");//之后做了灰度变换和腐蚀处理但寻中线midlineNum=midlineDetectWithCurveFitting函数只能使用的img才正确，为什么？
 	// Mat img=imread("imgs/twists.jpg");
 	if(img.empty()){
 		cout<<"image is empty or the path is invalid"<<endl;
@@ -42,7 +42,7 @@ int main(){
 	Mat imgErode=erode(imgThreshold);
 	Point leftEdge[img.rows*2];
 	// int leftEdgeNum=leftEdgeDetectWithBinary(imgErode,leftEdge);
-	int leftEdgeNum=leftEdgeDetectWithDifferenceSum(imgGray,leftEdge,differenceSumThreshold(imgGray,200));
+	int leftEdgeNum=leftEdgeDetectWithDifferenceSum(imgErode,leftEdge,differenceSumThreshold(imgGray,200),2);//在这里传入imgGray却不行，为什么？
 	
 	{
 		cout<<"leftEdgeNum:"<<leftEdgeNum<<endl;
@@ -270,23 +270,6 @@ Mat erode(Mat &imgThreshold){
 	}
 	return imgErode;
 }
-//差比和算法
-int differenceSum(int pixel1,int pixel2){
-	return 100*(pixel1-pixel2)/(pixel1+pixel2);
-}
-//间隔五个点，差比和得到分辨黑白点合适的阈值，diff为黑白点灰度值之差
-int differenceSumThreshold(Mat &imgGray,int diff){
-	int threshold=0;
-	for(int i=imgGray.rows;i>5;i--){
-		for(int j=0;j<imgGray.cols;j++){
-			if((imgGray.at<uchar>(i,j)-imgGray.at<uchar>(i-5,j))>=diff){//找到黑白点
-				threshold=differenceSum(imgGray.at<uchar>(i,j),imgGray.at<uchar>(i-5,j))*0.7;//阈值为黑白点的差比和的0.7倍
-				break;
-			}
-		}
-	}
-	return threshold;
-}
 //二值化寻左线
 int leftEdgeDetectWithBinary(Mat &img,Point leftEdge[]){
 	int leftEdgeNum=0;
@@ -313,48 +296,49 @@ int leftEdgeDetectWithBinary(Mat &img,Point leftEdge[]){
 			currentPoint.x=currentPoint.x+1;
 			currentPoint.y=currentPoint.y-1;
 		}else if(img.at<uchar>(currentPoint.y-1,currentPoint.x)==0&&direction!=5&&direction!=6&&direction!=7){//正上方
-			direction=1;
+			direction=2;
 			leftEdge[leftEdgeNum].x=currentPoint.x;
 			leftEdge[leftEdgeNum].y=currentPoint.y-1;
 			leftEdgeNum++;
 			currentPoint.x=currentPoint.x;
 			currentPoint.y=currentPoint.y-1;
 		}else if(img.at<uchar>(currentPoint.y-1,currentPoint.x-1)==0&&direction!=6&&direction!=7&&direction!=8){//左上角
-			direction=1;
+			direction=3;
 			leftEdge[leftEdgeNum].x=currentPoint.x-1;
 			leftEdge[leftEdgeNum].y=currentPoint.y-1;
 			leftEdgeNum++;
 			currentPoint.x=currentPoint.x-1;
 			currentPoint.y=currentPoint.y-1;
 		}else if(img.at<uchar>(currentPoint.y,currentPoint.x-1)==0&&direction!=1&&direction!=2&&direction!=6&&direction!=7&&direction!=8){//正左方
-
+			direction=4;
 			leftEdge[leftEdgeNum].x=currentPoint.x-1;
 			leftEdge[leftEdgeNum].y=currentPoint.y;
 			leftEdgeNum++;
 			currentPoint.x=currentPoint.x-1;
 			currentPoint.y=currentPoint.y;
 		}else if(img.at<uchar>(currentPoint.y+1,currentPoint.x-1)==0&&direction!=1&&direction!=2&&direction!=8){//左下角
-			direction=2;
+			direction=5;
 			leftEdge[leftEdgeNum].x=currentPoint.x-1;
 			leftEdge[leftEdgeNum].y=currentPoint.y+1;
 			leftEdgeNum++;
 			currentPoint.x=currentPoint.x-1;
 			currentPoint.y=currentPoint.y+1;
 		}else if(img.at<uchar>(currentPoint.y+1,currentPoint.x)==0&&direction!=1&&direction!=2&&direction!=3&&direction!=4&&direction!=8){//正下方
-			direction=2;
+			direction=6;
 			leftEdge[leftEdgeNum].x=currentPoint.x;
 			leftEdge[leftEdgeNum].y=currentPoint.y+1;
 			leftEdgeNum++;
 			currentPoint.x=currentPoint.x;
 			currentPoint.y=currentPoint.y+1;
 		}else if(img.at<uchar>(currentPoint.y+1,currentPoint.x+1)==0&&direction!=2&&direction!=3&&direction!=4){//右下角
-			direction=2;
+			direction=7;
 			leftEdge[leftEdgeNum].x=currentPoint.x+1;
 			leftEdge[leftEdgeNum].y=currentPoint.y+1;
 			leftEdgeNum++;
 			currentPoint.x=currentPoint.x+1;
 			currentPoint.y=currentPoint.y+1;
 		}else if(img.at<uchar>(currentPoint.y,currentPoint.x+1)==0&&direction!=2&&direction!=3&&direction!=4&&direction!=5&&direction!=6){//正右方
+			direction=8;
 			leftEdge[leftEdgeNum].x=currentPoint.x+1;
 			leftEdge[leftEdgeNum].y=currentPoint.y;
 			leftEdgeNum++;
@@ -371,27 +355,50 @@ int leftEdgeDetectWithBinary(Mat &img,Point leftEdge[]){
 	
 	return leftEdgeNum;
 }
+//差比和算法
+int differenceSum(int pixel1,int pixel2){
+	if(pixel1+pixel2==0){
+		return 0;
+	}//防止除数为0
+	return (pixel1-pixel2)>=0?100*(pixel1-pixel2)/(pixel1+pixel2):-100*(pixel1-pixel2)/(pixel1+pixel2);
+}
+//间隔五个点，差比和得到分辨黑白点合适的阈值，diff为黑白点灰度值之差
+int differenceSumThreshold(Mat &imgGray,int diff){
+	int threshold=0;
+	for(int i=imgGray.rows;i>5;i--){
+		for(int j=0;j<imgGray.cols;j++){
+			if((imgGray.at<uchar>(i,j)-imgGray.at<uchar>(i-5,j))>=diff){//找到黑白点
+				threshold=differenceSum(imgGray.at<uchar>(i,j),imgGray.at<uchar>(i-5,j))*0.7;//阈值为黑白点的差比和的0.7倍
+				{
+					cout<<"differenceSumThreshold:"<<threshold<<endl;
+				}
+				return threshold;
+			}
+			
+		}
+	}
+	return threshold;
+}
 //差比和寻左线
-int leftEdgeDetectWithDifferenceSum(Mat &imgGray,Point leftEdge[],int threshold){
+int leftEdgeDetectWithDifferenceSum(Mat &imgGray,Point leftEdge[],int threshold,int period){
 	int leftEdgeNum=0;
 	//八邻域边缘跟踪寻找左边界，类似于leftEdgeDetectWithBinary函数中的实现，区别是判断方法不同
 	int direction=0;//标记方向，避免搜索时重复，1，2，3，4，5，6，7，8分别为1右上，2正上，3左上，4正左，5左下，6正下，7右下，8正右，即从右上角逆时针方向
 	Point currentPoint;//当前点
 	//找到第一个左边界点
-	for(int i=imgGray.cols/2;i>5;i-=5){
-		if(differenceSum(imgGray.at<uchar>(imgGray.rows-2,i),imgGray.at<uchar>(imgGray.rows-2,i-5))>=threshold){//大于阈值即为边界点
-			leftEdge[leftEdgeNum].x=i;
+	for(int i=imgGray.cols/2;i>period;i-=period){
+		if(differenceSum(imgGray.at<uchar>(imgGray.rows-2,i),imgGray.at<uchar>(imgGray.rows-2,i-period))>=threshold){//大于阈值即为边界点
+			leftEdge[leftEdgeNum].x=i-period;
 			leftEdge[leftEdgeNum].y=imgGray.rows-2;
 			leftEdgeNum++;
-			currentPoint.x=i;
+			currentPoint.x=i-period;
 			currentPoint.y=imgGray.rows-2;
 			break;
 		}
 	}
 	//开始边缘跟踪
-
-	//TODO:改为适用于差比和的边缘跟踪，有问题待修复，初步推断是threshold的问题
-	while(currentPoint.x>0&&currentPoint.y>0){
+	
+	while(currentPoint.x>0&&currentPoint.y>0&&currentPoint.x<imgGray.cols&&currentPoint.y<imgGray.rows){
 		if(differenceSum(imgGray.at<uchar>(currentPoint.y,currentPoint.x),imgGray.at<uchar>(currentPoint.y-1,currentPoint.x+1))<=threshold&&direction!=4&&direction!=5&&direction!=6){//右上角
 			direction=1;
 			leftEdge[leftEdgeNum].x=currentPoint.x+1;
@@ -400,48 +407,49 @@ int leftEdgeDetectWithDifferenceSum(Mat &imgGray,Point leftEdge[],int threshold)
 			currentPoint.x=currentPoint.x+1;
 			currentPoint.y=currentPoint.y-1;
 		}else if(differenceSum(imgGray.at<uchar>(currentPoint.y,currentPoint.x),imgGray.at<uchar>(currentPoint.y-1,currentPoint.x))<=threshold&&direction!=5&&direction!=6&&direction!=7){//正上方
-			direction=1;
+			direction=2;
 			leftEdge[leftEdgeNum].x=currentPoint.x;
 			leftEdge[leftEdgeNum].y=currentPoint.y-1;
 			leftEdgeNum++;
 			currentPoint.x=currentPoint.x;
 			currentPoint.y=currentPoint.y-1;
 		}else if(differenceSum(imgGray.at<uchar>(currentPoint.y,currentPoint.x),imgGray.at<uchar>(currentPoint.y-1,currentPoint.x-1))<=threshold&&direction!=6&&direction!=7&&direction!=8){//左上角
-			direction=1;
+			direction=3;
 			leftEdge[leftEdgeNum].x=currentPoint.x-1;
 			leftEdge[leftEdgeNum].y=currentPoint.y-1;
 			leftEdgeNum++;
 			currentPoint.x=currentPoint.x-1;
 			currentPoint.y=currentPoint.y-1;
 		}else if(differenceSum(imgGray.at<uchar>(currentPoint.y,currentPoint.x),imgGray.at<uchar>(currentPoint.y,currentPoint.x-1))<=threshold&&direction!=1&&direction!=2&&direction!=6&&direction!=7&&direction!=8){//正左方
-
+			direction=4;
 			leftEdge[leftEdgeNum].x=currentPoint.x-1;
 			leftEdge[leftEdgeNum].y=currentPoint.y;
 			leftEdgeNum++;
 			currentPoint.x=currentPoint.x-1;
 			currentPoint.y=currentPoint.y;
 		}else if(differenceSum(imgGray.at<uchar>(currentPoint.y,currentPoint.x),imgGray.at<uchar>(currentPoint.y+1,currentPoint.x-1))<=threshold&&direction!=1&&direction!=2&&direction!=8){//左下角
-			direction=2;
+			direction=5;
 			leftEdge[leftEdgeNum].x=currentPoint.x-1;
 			leftEdge[leftEdgeNum].y=currentPoint.y+1;
 			leftEdgeNum++;
 			currentPoint.x=currentPoint.x-1;
 			currentPoint.y=currentPoint.y+1;
 		}else if(differenceSum(imgGray.at<uchar>(currentPoint.y,currentPoint.x),imgGray.at<uchar>(currentPoint.y+1,currentPoint.x))<=threshold&&direction!=1&&direction!=2&&direction!=3&&direction!=4&&direction!=8){//正下方
-			direction=2;
+			direction=6;
 			leftEdge[leftEdgeNum].x=currentPoint.x;
 			leftEdge[leftEdgeNum].y=currentPoint.y+1;
 			leftEdgeNum++;
 			currentPoint.x=currentPoint.x;
 			currentPoint.y=currentPoint.y+1;
 		}else if(differenceSum(imgGray.at<uchar>(currentPoint.y,currentPoint.x),imgGray.at<uchar>(currentPoint.y+1,currentPoint.x+1))<=threshold&&direction!=2&&direction!=3&&direction!=4){//右下角
-			direction=2;
+			direction=7;
 			leftEdge[leftEdgeNum].x=currentPoint.x+1;
 			leftEdge[leftEdgeNum].y=currentPoint.y+1;
 			leftEdgeNum++;
 			currentPoint.x=currentPoint.x+1;
 			currentPoint.y=currentPoint.y+1;
 		}else if(differenceSum(imgGray.at<uchar>(currentPoint.y,currentPoint.x),imgGray.at<uchar>(currentPoint.y,currentPoint.x+1))<=threshold&&direction!=2&&direction!=3&&direction!=4&&direction!=5&&direction!=6){//正右方
+			direction=8;
 			leftEdge[leftEdgeNum].x=currentPoint.x+1;
 			leftEdge[leftEdgeNum].y=currentPoint.y;
 			leftEdgeNum++;
