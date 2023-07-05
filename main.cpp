@@ -1,3 +1,5 @@
+//TODO:寻找更合理的方法寻中线
+//TODO:考虑不采用二值化的方式而直接通过灰度图探测道路线
 #include <iostream>
 #include "opencv2/opencv.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
@@ -11,10 +13,10 @@ Mat adaptiveThreshold(Mat &imgGray);
 Mat otsuThreshold(Mat &imgGray);
 Mat erode(Mat &imgThreshold);
 int leftEdgeDetect(Mat &img,Point leftEdge[]);
-int midlineDetectWithAve(Mat &img,Point leftEdge[],int leftEdgeNum,Point midline[]);
+int midlineDetectWithAve(Mat &img,Point leftEdge[],int leftEdgeNum,Point midline[],int num);
 int midlineDetectWithVertical(Mat &img,Point leftEdge[],int leftEdgeNum,Point midline[]);
 int midlineDetectWithCurveFitting(Mat &img,Point leftEdge[],int leftEdgeNum,Point midline[],int num);
-
+double calculateErrors(Point midline[],int midlineNum);
 int main(){
 
 	Mat img=imread("imgs/twists.jpg");//之后做了灰度变换和腐蚀处理但寻中线仍使用的img
@@ -26,25 +28,32 @@ int main(){
 	Mat imgThreshold=otsuThreshold(imgGray);
 	// Mat imgThreshold=threshold(imgGray,130);
 	Mat imgErode=erode(imgThreshold);
-
 	Point leftEdge[img.rows*2];
 	int leftEdgeNum=leftEdgeDetect(imgErode,leftEdge);
-	cout<<"leftEdgeNum:"<<leftEdgeNum<<endl;
-	
+	{
+		cout<<"leftEdgeNum:"<<leftEdgeNum<<endl;
+	}
 	
 	for(int i=0;i<leftEdgeNum;i++){
 		circle(img,leftEdge[i],1,Scalar(0,0,255),2);
 	}//画出左边界点
 
 	Point midline[leftEdgeNum];
-	int midlineNum=midlineDetectWithCurveFitting(img,leftEdge,leftEdgeNum,midline,10);
-	// int midlineNum=midlineDetectWithAve(imgErode,leftEdge,leftEdgeNum,midline);
+	// int midlineNum=midlineDetectWithCurveFitting(img,leftEdge,leftEdgeNum,midline,10);
+	int midlineNum=midlineDetectWithAve(imgErode,leftEdge,leftEdgeNum,midline,5);
 	// int midlineNum=midlineDetectWithVertical(imgErode,leftEdge,leftEdgeNum,midline);
-	cout<<"midlineNum:"<<midlineNum<<endl;
+	{
+		cout<<"midlineNum:"<<midlineNum<<endl;
+	}
 	for(int i=0;i<midlineNum;i++){
 		circle(img,midline[i],1,Scalar(0,255,0),2);
 	}//画出中线点
 	
+	double error=calculateErrors(midline,midlineNum);
+	{
+		cout<<"error:"<<error<<endl;
+	}
+
 	imshow("img",imgErode);
 	waitKey(0);
 	imshow("imgThreshold",img);
@@ -303,17 +312,17 @@ int leftEdgeDetect(Mat &img,Point leftEdge[]){
 			break;
 		}
 
-		for(int i=currentPoint.x+1;i<img.cols/2&&img.at<uchar>(currentPoint.y,i)==0;i++){
+		for(int i=currentPoint.x+1;img.at<uchar>(currentPoint.y,i)==0;i++){
 			leftEdge[leftEdgeNum].x=i;//找到最左线右边的像素作为左线的点
 		}
 	}
 	
 	return leftEdgeNum;
 }
-//直接横向找右线点另一点，取中点做中线上的点，直道效果好，弯道效果有偏差
-int midlineDetectWithAve(Mat &img,Point leftEdge[],int leftEdgeNum,Point midline[]){
+//直接横向找右线点另一点，取中点做中线上的点，直道效果好，弯道效果有偏差，间隔num个像素找一个点以减少计算量
+int midlineDetectWithAve(Mat &img,Point leftEdge[],int leftEdgeNum,Point midline[],int num){
 	int midlineNum=0;
-	for(int i=0;i<leftEdgeNum;i++){
+	for(int i=0;i<leftEdgeNum;i+=num){
 		for(int j=leftEdge[i].x+5;j<img.cols;j++){
 			if(img.at<uchar>(leftEdge[i].y,j)==0){
 				midline[midlineNum].x=(leftEdge[i].x+j)/2;
@@ -325,7 +334,7 @@ int midlineDetectWithAve(Mat &img,Point leftEdge[],int leftEdgeNum,Point midline
 	}
 	return midlineNum;
 }
-//找两个点做垂线交右线于另一点，取中点做中线上的点，效果非常不好，不能使用，应采用拟合方式midlineDetectWithCurveFitting，即，一方面因为垂线可能和左线自身相交，另一方面因为像素离散，垂线和右线相交会偏向一侧
+//废弃，找两个点做垂线交右线于另一点，取中点做中线上的点，效果非常不好，不能使用，应采用拟合方式midlineDetectWithCurveFitting，即，一方面因为垂线可能和左线自身相交，另一方面因为像素离散，垂线和右线相交会偏向一侧
 int midlineDetectWithVertical(Mat &img,Point leftEdge[],int leftEdgeNum,Point midline[]){//求左线的两点的垂线，求垂线与右线的交点，求交点的中点，作为中线的点
 	int midlineNum=0;
 	double k;//左线两点垂线方程的斜率
@@ -356,8 +365,8 @@ int midlineDetectWithVertical(Mat &img,Point leftEdge[],int leftEdgeNum,Point mi
 
 	return midlineNum;
 }
-//取左线num个点拟合直线再做垂线交右线于另一点，取中点做中线的点，弯道效果非常不好，有误差待处理，仍偏向一侧
-int midlineDetectWithCurveFitting(Mat &img,Point leftEdge[],int leftEdgeNum,Point midline[],int num){//求左线的两点的垂线，求垂线与右线的交点，求交点的中点，作为中线的点
+//取左线num个点拟合直线再做垂线交右线于另一点，取中点做中线的点，有误差待处理，仍偏向一侧，弯道效果非常不好，原因猜测是最小二分拟合不适用于曲线，考虑使用其他方法进行拟合（如霍夫变换等）
+int midlineDetectWithCurveFitting(Mat &img,Point leftEdge[],int leftEdgeNum,Point midline[],int num){//求左线num个点的拟合直线的垂线，求垂线与右线的交点，求交点的中点，作为中线的点
 	int midlineNum=0;
 	//y=kx+c
 	double k;//左线拟合直线的垂线方程的斜率
@@ -400,4 +409,14 @@ int midlineDetectWithCurveFitting(Mat &img,Point leftEdge[],int leftEdgeNum,Poin
 	}
 
 	return midlineNum;
+}
+double calculateErrors(Point midline[],int midlineNum){
+	int errorsSum=0;
+	double errors=0;
+	Point basePoint=midline[0];//基准点
+	for(int i=1;i<midlineNum;i++){
+		errorsSum+=midline[i].x-basePoint.x;//误差为中线点的x坐标与基准点的x坐标的差的和
+	}
+	errors=(double)errorsSum/(double)(midlineNum-1);//平均误差
+	return errors;
 }
