@@ -25,8 +25,9 @@ int midlineDetectWithCurveFitting(Mat &img,Point leftEdge[],int leftEdgeNum,Poin
 double calculateErrors(Point midline[],int midlineNum);
 int main(){
 	
-	Mat img=imread("imgs/twists.jpg");//之后做了灰度变换和腐蚀处理但寻中线midlineNum=midlineDetectWithCurveFitting函数只能使用的img才正确，为什么？
-	// Mat img=imread("imgs/twists.jpg");
+	// Mat img=imread("imgs/straight.jpg");//之后做了灰度变换和腐蚀处理但寻中线midlineNum=midlineDetectWithCurveFitting函数只能使用的img才正确，为什么？
+	Mat img=imread("imgs/twists.jpg");
+	// Mat img=imread("imgs/0.jpg");
 	if(img.empty()){
 		cout<<"image is empty or the path is invalid"<<endl;
 		return 1;
@@ -55,9 +56,9 @@ int main(){
 	Point midline[leftEdgeNum];
 
 
-	// int midlineNum=midlineDetectWithCurveFitting(img,leftEdge,leftEdgeNum,midline,10);
-	int midlineNum=midlineDetectWithAve(imgErode,leftEdge,leftEdgeNum,midline,10);
-	// int midlineNum=midlineDetectWithVertical(imgErode,leftEdge,leftEdgeNum,midline);
+	int midlineNum=midlineDetectWithCurveFitting(imgErode,leftEdge,leftEdgeNum,midline,10);
+	// int midlineNum=midlineDetectWithAve(imgErode,leftEdge,leftEdgeNum,midline,10);
+	// int midlineNum=midlineDetectWithVertical(imgErode,leftEdge,leftEdgeNum,midline,10);
 
 	
 	// int midlineNum=showDuration(midlineDetectWithAve,imgErode,leftEdge,leftEdgeNum,midline,1);
@@ -77,7 +78,7 @@ int main(){
 
 	
 
-	imshow("img",imgErode);
+	imshow("img0",imgErode);
 	waitKey(0);
 	imshow("imgThreshold",img);
 	waitKey(0);	
@@ -485,7 +486,7 @@ int midlineDetectWithVertical(Mat &img,Point leftEdge[],int leftEdgeNum,Point mi
 	int midlineNum=0;
 	double k;//左线两点垂线方程的斜率
 	double c;//左线两点垂线方程的常数项
-	for(int i=0;i<leftEdgeNum;i+=num){
+	for(int i=0;i<leftEdgeNum-num;i+=num){
 		//y-y0=k(x-x0)
 		//y=kx+y0-kx0
 		//c=y0-kx0
@@ -497,10 +498,10 @@ int midlineDetectWithVertical(Mat &img,Point leftEdge[],int leftEdgeNum,Point mi
 		for(int j=1;j<img.cols-leftEdge[i].x;j++){
 			int x0=leftEdge[i].x+j;
 			int y0=k*x0+c;
-			if(y0>img.rows-1||x0>img.cols-1){
+			if(y0>=img.rows-1||x0>=img.cols-1){
 				continue;//垂线与右线的交点不在图像内，跳过
 			}
-			if(img.at<uchar>(x0,y0)==0){//按垂线找到与右线的交点，交点坐标为(leftEdge[i].x+j,k*(leftEdge[i].x)+c)
+			if(img.at<uchar>(y0,x0)==0&&(x0-leftEdge[i].x>=20)){//按垂线找到与右线的交点，交点坐标为(leftEdge[i].x+j,k*(leftEdge[i].x)+c)
 				midline[midlineNum].x=(leftEdge[i].x+x0)/2;
 				midline[midlineNum].y=(leftEdge[i].y+y0)/2;
 				midlineNum++;
@@ -508,17 +509,19 @@ int midlineDetectWithVertical(Mat &img,Point leftEdge[],int leftEdgeNum,Point mi
 			}
 		}
 	}
-
 	return midlineNum;
 }
+
+//TODO:确定垂线的方向问题
 //取左线num个点拟合直线再做垂线交右线于另一点，取中点做中线的点，有误差待处理，仍偏向一侧，弯道效果非常不好，原因猜测是最小二分拟合不适用于曲线，考虑使用其他方法进行拟合（如霍夫变换等）
 int midlineDetectWithCurveFitting(Mat &img,Point leftEdge[],int leftEdgeNum,Point midline[],int num){//求左线num个点的拟合直线的垂线，求垂线与右线的交点，求交点的中点，作为中线的点
 	int midlineNum=0;
 	//y=kx+c
-	double k;//左线拟合直线的垂线方程的斜率
-	double c;//左线拟合直线的垂线方程的常数项
+	double k=0;//左线拟合直线的垂线方程的斜率
+	double c=0;//左线拟合直线的垂线方程的常数项
 	int m1=0,m2=0,m3=0,m4=0,m5=0;//最小二乘拟合直线所需参数
-	for(int i=0;i<leftEdgeNum;i+=num){
+
+	for(int i=0;i<leftEdgeNum-num;i+=num){
 		//将参数初始化为0
 		m1=0;
 		m2=0;
@@ -539,13 +542,14 @@ int midlineDetectWithCurveFitting(Mat &img,Point leftEdge[],int leftEdgeNum,Poin
 		k=-(double)(num*m4-m5)/(double)(num*m1-m2*m3);//拟合直线的垂线的斜率
 		c=(m3-k*m2)/num;//拟合直线的曲线的垂线的常数项
 		
-		for(int j=leftEdge[i].x+5;j<img.cols;j++){
+		for(int j=leftEdge[i].x+1;j<img.cols;j++){
 			int x0=j;
 			int y0=k*x0+c;
-			if(y0>img.rows-1||x0>img.cols-1){
+			if(y0>=img.rows-1||x0>=img.cols-1){
 				continue;//垂线与右线的交点不在图像内，跳过
 			}
-			if(img.at<uchar>(x0,y0)==0){//按垂线找到与右线的交点，交点坐标为(j,k*(leftEdge[i].x)+c)
+			
+			if(img.at<uchar>(y0,x0)==0&&(x0-leftEdge[i].x>=20)){//按垂线找到与右线的交点，交点坐标为(j,k*(leftEdge[i].x)+c)
 				midline[midlineNum].x=(leftEdge[i].x+x0)/2;
 				midline[midlineNum].y=(leftEdge[i].y+y0)/2;
 				midlineNum++;
@@ -553,9 +557,9 @@ int midlineDetectWithCurveFitting(Mat &img,Point leftEdge[],int leftEdgeNum,Poin
 			}
 		}
 	}
-
 	return midlineNum;
 }
+//errors为正即右偏，为负即左偏
 double calculateErrors(Point midline[],int midlineNum){
 	int errorsSum=0;
 	double errors=0;
