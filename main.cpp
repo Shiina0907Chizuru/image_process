@@ -8,7 +8,6 @@ using namespace cv;
 using namespace std;
 
 int showDuration(int (*functionPtr)(Mat &img,Point leftEdge[],int leftEdgeNum,Point midline[],int num),Mat &img,Point leftEdge[],int leftEdgeNum,Point midline[],int num);
-
 Mat baseImgGrey(Mat &img);
 Mat Compress(Mat &imgGray);
 Mat threshold(Mat &imgGray,int thresh);
@@ -23,16 +22,16 @@ int midlineDetectWithAve(Mat &img,Point leftEdge[],int leftEdgeNum,Point midline
 int midlineDetectWithVertical(Mat &img,Point leftEdge[],int leftEdgeNum,Point midline[],int num);
 int midlineDetectWithCurveFitting(Mat &img,Point leftEdge[],int leftEdgeNum,Point midline[],int num);
 double calculateErrors(Point midline[],int midlineNum);
+// Mat skeletonizeWithZhangSuen(Mat &img);//Zhang-Suen细化算法
 int main(){
 	
 	// Mat img=imread("imgs/straight.jpg");//之后做了灰度变换和腐蚀处理但寻中线midlineNum=midlineDetectWithCurveFitting函数只能使用的img才正确，为什么？
-	Mat img=imread("imgs/twists.jpg");
+	Mat img=imread("imgs/0.jpg");
 	// Mat img=imread("imgs/0.jpg");
 	if(img.empty()){
 		cout<<"image is empty or the path is invalid"<<endl;
 		return 1;
 	}
-	
 	// {
 	// 	circle(img,Point{img.cols/2,img.rows/2},1,Scalar(255,0,0),2);
 	// }
@@ -481,7 +480,7 @@ int midlineDetectWithAve(Mat &img,Point leftEdge[],int leftEdgeNum,Point midline
 	}
 	return midlineNum;
 }
-//废弃，间隔num找两个点做垂线交右线于另一点，取中点做中线上的点，效果非常不好，不能使用，应采用拟合方式midlineDetectWithCurveFitting，即，一方面因为垂线可能和左线自身相交，另一方面因为像素离散，垂线和右线相交会偏向一侧
+//间隔num找两个点做垂线交右线于另一点，取中点做中线上的点
 int midlineDetectWithVertical(Mat &img,Point leftEdge[],int leftEdgeNum,Point midline[],int num){//求左线的两点的垂线，求垂线与右线的交点，求交点的中点，作为中线的点
 	int midlineNum=0;
 	double k;//左线两点垂线方程的斜率
@@ -490,14 +489,27 @@ int midlineDetectWithVertical(Mat &img,Point leftEdge[],int leftEdgeNum,Point mi
 		//y-y0=k(x-x0)
 		//y=kx+y0-kx0
 		//c=y0-kx0
-		if(leftEdge[i].y==leftEdge[i+1].y){
-			continue;//左线两点的y坐标相等，垂线不存在，跳过
+		if(leftEdge[i].y==leftEdge[i+1].y){//垂线不存在，向上寻找交点
+			for(int j=leftEdge[i].y;j>0;j--){
+				if(j>=img.rows-1){
+				break;//与边界的交点不在图像内，跳过
+				}
+				if(img.at<uchar>(j,leftEdge[i].x)==0&&(leftEdge[i].y-j>=20)){//按垂线找到与右线的交点，交点坐标为(leftEdge[i].x+j,k*(leftEdge[i].x)+c)
+					midline[midlineNum].x=leftEdge[i].x;
+					midline[midlineNum].y=(leftEdge[i].y+j)/2;
+					midlineNum++;
+					break;
+				}
+			}
+			continue;
 		}
 		k=-(double)(leftEdge[i].x-leftEdge[i+1].x)/(double)(leftEdge[i].y-leftEdge[i+1].y);
 		c=leftEdge[i].y-k*leftEdge[i].x;
+		int x0;
+		int y0;
 		for(int j=1;j<img.cols-leftEdge[i].x;j++){
-			int x0=leftEdge[i].x+j;
-			int y0=k*x0+c;
+			x0=leftEdge[i].x+j;
+			y0=k*x0+c;
 			if(y0>=img.rows-1||x0>=img.cols-1){
 				continue;//垂线与右线的交点不在图像内，跳过
 			}
@@ -508,6 +520,21 @@ int midlineDetectWithVertical(Mat &img,Point leftEdge[],int leftEdgeNum,Point mi
 				break;
 			}
 		}
+	}
+	int midlineNumDel[midlineNum];//记录需要删除的点的序号
+	int midlineNumDelNum=0;//记录需要删除的点的数量
+	for(int z=1;z<midlineNum-1;z++){
+		//去除相邻距离过远的点（因为无法判断法线方向，索性去除）
+		//错误的中心点必然距离相邻点过远，所以记录下来，最后删除
+		//多增加了一些计算，相比之下降低了效率，减小了误差，但考虑到实际应用中中心点数量(midlineNum)较小，计算次数较少，可以接受
+		if((((midline[z].x-midline[z-1].x)*(midline[z].x-midline[z-1].x)+(midline[z].y-midline[z-1].y)*(midline[z].y-midline[z-1].y))>1000)&&(((midline[z].x-midline[z+1].x)*(midline[z].x-midline[z+1].x)+(midline[z].y-midline[z+1].y)*(midline[z].y-midline[z+1].y))>1000)){
+			midlineNumDel[midlineNumDelNum]=z;
+			midlineNumDelNum++;
+		}
+	}
+	for(int z=0;z<midlineNumDelNum-1;z++){//删除错误的中心点，即赋值为相邻点的值
+		midline[midlineNumDel[z]].x=midline[midlineNumDel[z]+1].x;
+		midline[midlineNumDel[z]].y=midline[midlineNumDel[z]+1].y;
 	}
 	return midlineNum;
 }
@@ -536,15 +563,27 @@ int midlineDetectWithCurveFitting(Mat &img,Point leftEdge[],int leftEdgeNum,Poin
 			m4+=leftEdge[i+d].x*leftEdge[i+d].x;//x平方的和
 		}
 		m5=m2*m2;//x和的平方
-		if((num*m1-m2*m3)==0){
-			continue;//垂线不存在，跳过
+		if((num*m1-m2*m3)==0){//垂线不存在，向上寻找交点
+			for(int j=leftEdge[i].y;j>0;j--){
+				if(j>=img.rows-1){
+				break;//与边界的交点不在图像内，跳过
+				}
+				if(img.at<uchar>(j,leftEdge[i].x)==0&&(leftEdge[i].y-j>=20)){//按垂线找到与右线的交点，交点坐标为(leftEdge[i].x+j,k*(leftEdge[i].x)+c)
+					midline[midlineNum].x=leftEdge[i].x;
+					midline[midlineNum].y=(leftEdge[i].y+j)/2;
+					midlineNum++;
+					break;
+				}
+			}
+			continue;
 		}
 		k=-(double)(num*m4-m5)/(double)(num*m1-m2*m3);//拟合直线的垂线的斜率
 		c=(m3-k*m2)/num;//拟合直线的曲线的垂线的常数项
-		
+		int x0;
+		int y0;
 		for(int j=leftEdge[i].x+1;j<img.cols;j++){
-			int x0=j;
-			int y0=k*x0+c;
+			x0=j;
+			y0=k*x0+c;
 			if(y0>=img.rows-1||x0>=img.cols-1){
 				continue;//垂线与右线的交点不在图像内，跳过
 			}
@@ -556,6 +595,21 @@ int midlineDetectWithCurveFitting(Mat &img,Point leftEdge[],int leftEdgeNum,Poin
 				break;
 			}
 		}
+	}
+	int midlineNumDel[midlineNum];//记录需要删除的点的序号
+	int midlineNumDelNum=0;//记录需要删除的点的数量
+	for(int z=1;z<midlineNum-1;z++){
+		//去除相邻距离过远的点（因为无法判断法线方向，索性去除）
+		//错误的中心点必然距离相邻点过远，所以记录下来，最后删除
+		//多增加了一些计算，相比之下降低了效率，减小了误差，但考虑到实际应用中中心点数量(midlineNum)较小，计算次数较少，可以接受
+		if((((midline[z].x-midline[z-1].x)*(midline[z].x-midline[z-1].x)+(midline[z].y-midline[z-1].y)*(midline[z].y-midline[z-1].y))>1000)&&(((midline[z].x-midline[z+1].x)*(midline[z].x-midline[z+1].x)+(midline[z].y-midline[z+1].y)*(midline[z].y-midline[z+1].y))>1000)){
+			midlineNumDel[midlineNumDelNum]=z;
+			midlineNumDelNum++;
+		}
+	}
+	for(int z=0;z<midlineNumDelNum-1;z++){//删除错误的中心点，即赋值为相邻点的值
+		midline[midlineNumDel[z]].x=midline[midlineNumDel[z]+1].x;
+		midline[midlineNumDel[z]].y=midline[midlineNumDel[z]+1].y;
 	}
 	return midlineNum;
 }
